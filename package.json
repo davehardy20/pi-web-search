@@ -1,0 +1,65 @@
+{
+  "name": "@davehardy20/pi-web-search",
+  "version": "0.1.0",
+  "description": "Pi package for web search via Tavily API.",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "web-search",
+    "tavily"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davehardy20/pi-web-search.git"
+  },
+  "bugs": {
+    "url": "https://github.com/davehardy20/pi-web-search/issues"
+  },
+  "homepage": "https://github.com/davehardy20/pi-web-search#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-ai": "*",
+    "typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": false
+    },
+    "@earendil-works/pi-ai": {
+      "optional": false
+    },
+    "typebox": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.74.0",
+    "@earendil-works/pi-ai": "^0.74.0",
+    "@types/node": "^24.7.2",
+    "typebox": "^1.1.24",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}
