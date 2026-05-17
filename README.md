@@ -17,6 +17,12 @@ export TAVILY_API_KEY='your-key'
 
 ## Install
 
+From npm:
+
+```bash
+pi install npm:@davehardy20/pi-web-search
+```
+
 From git:
 
 ```bash
