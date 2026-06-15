@@ -5,7 +5,8 @@ Pi package for web search via Tavily API.
 ## What it adds
 
 - `web_search` tool — Search the web using Tavily API. Returns relevant results with summaries and source URLs.
-- `/web-search-status` — Show package name, version, source path, and API key status.
+- `/web-search-status` — Show package name, version, source path, API key status,
+  and search readiness.
 
 ## Prerequisites
 
@@ -44,7 +45,8 @@ pi -e /Users/dave/tools/pi-web-search
 ## Notes
 
 - Requires `TAVILY_API_KEY` to be set in the environment. The tool returns a clear error if the key is missing.
-- If the `web_search` tool appears twice, Pi is probably loading both this package and the old local `agent/extensions/web-search.ts` file.
+- If the `web_search` tool appears twice, Pi is probably loading both this package
+  and the old local `agent/extensions/web-search.ts` file.
 - Disable or remove the old local auto-discovered extension before reload verification.
 
 ## Update flow
@@ -64,6 +66,7 @@ Run `/web-search-status` to confirm:
 - package version
 - loaded source path
 - Tavily API key status (set/not set)
+- search readiness (ready/not ready)
 
 ## Build and test
 

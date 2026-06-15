@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	MISSING_TAVILY_API_KEY_MESSAGE,
+	ProviderSearchRuntime,
 	type SearchRequest,
 	TavilySearchProvider,
+	TavilySearchRuntime,
 } from "../src/search-provider.js";
 
 function createMockFetch(
@@ -125,5 +128,57 @@ describe("TavilySearchProvider", () => {
 		await provider.search(request);
 
 		expect(lastCall.init.signal).toBe(controller.signal);
+	});
+});
+
+describe("SearchRuntime", () => {
+	it("reports Tavily as not ready when the API key is missing", async () => {
+		const runtime = new TavilySearchRuntime({});
+
+		expect(runtime.readiness()).toEqual({
+			ready: false,
+			providerName: "tavily",
+			reason: "missing-api-key",
+			message: MISSING_TAVILY_API_KEY_MESSAGE,
+			tavilyApiKeySet: false,
+		});
+		await expect(
+			runtime.search({
+				query: "test",
+				maxResults: 5,
+				searchDepth: "basic",
+				includeAnswer: true,
+			}),
+		).rejects.toThrow("TAVILY_API_KEY environment variable not set");
+	});
+
+	it("creates the Tavily provider only when searching with a ready runtime", async () => {
+		const provider = new ProviderSearchRuntime({
+			search: async (request) => ({
+				query: request.query,
+				results: [],
+				responseTime: 0.1,
+			}),
+		});
+		const createSearchProvider = vi.fn(() => provider);
+		const runtime = new TavilySearchRuntime(
+			{ TAVILY_API_KEY: "test-key" },
+			createSearchProvider,
+		);
+
+		expect(runtime.readiness()).toEqual({
+			ready: true,
+			providerName: "tavily",
+			tavilyApiKeySet: true,
+		});
+		const response = await runtime.search({
+			query: "test query",
+			maxResults: 5,
+			searchDepth: "basic",
+			includeAnswer: true,
+		});
+
+		expect(createSearchProvider).toHaveBeenCalledWith("test-key");
+		expect(response.query).toBe("test query");
 	});
 });
