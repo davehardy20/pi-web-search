@@ -12,26 +12,17 @@ import { fileURLToPath } from "node:url";
 import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import {
+  type SearchProvider,
+  type SearchRequest,
+  TavilySearchProvider,
+} from "./search-provider.js";
 
 interface PackageMetadata {
   name: string;
   version: string;
   packageRoot: string;
   sourcePath: string;
-}
-
-interface TavilyResult {
-  title: string;
-  url: string;
-  content: string;
-  score: number;
-}
-
-interface TavilyResponse {
-  answer?: string;
-  results: TavilyResult[];
-  query: string;
-  response_time: number;
 }
 
 const sourcePath = fileURLToPath(import.meta.url);
@@ -69,7 +60,13 @@ function getPackageMetadata(): PackageMetadata {
   return cachedPackageMetadata;
 }
 
-export default function webSearchExtension(pi: ExtensionAPI) {
+export type CreateSearchProvider = (apiKey: string) => SearchProvider;
+
+export default function webSearchExtension(
+  pi: ExtensionAPI,
+  createSearchProvider: CreateSearchProvider = (apiKey) =>
+    new TavilySearchProvider(apiKey),
+) {
   function sendVisibleMessage(
     content: string,
     details?: Record<string, unknown>,
@@ -149,43 +146,31 @@ export default function webSearchExtension(pi: ExtensionAPI) {
         );
       }
 
-      const maxResults = Math.min(Math.max(params.maxResults ?? 5, 1), 10);
+      const request: SearchRequest = {
+        query: params.query,
+        maxResults: Math.min(Math.max(params.maxResults ?? 5, 1), 10),
+        searchDepth: params.searchDepth ?? "basic",
+        includeAnswer: params.includeAnswer ?? true,
+        signal,
+      };
+
+      const provider = createSearchProvider(key);
 
       try {
-        const res = await fetch("https://api.tavily.com/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            api_key: key,
-            query: params.query,
-            max_results: maxResults,
-            search_depth: params.searchDepth ?? "basic",
-            include_answer: params.includeAnswer ?? true,
-            include_images: false,
-            include_raw_content: false,
-          }),
-          signal,
-        });
+        const data = await provider.search(request);
 
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`Tavily API error (${res.status}): ${errText}`);
-        }
-
-        const data = (await res.json()) as TavilyResponse;
-
-        if (!data.results || data.results.length === 0) {
+        if (data.results.length === 0) {
           return {
             content: [
               {
                 type: "text",
-                text: `No results found for: "${params.query}"`,
+                text: `No results found for: "${data.query}"`,
               },
             ],
             details: {
               query: data.query,
               resultCount: 0,
-              responseTime: data.response_time,
+              responseTime: data.responseTime,
             },
           };
         }
@@ -205,7 +190,7 @@ export default function webSearchExtension(pi: ExtensionAPI) {
         }
 
         lines.push(
-          `_(Search took ${data.response_time?.toFixed(2) ?? "?"}s)_`,
+          `_(Search took ${data.responseTime?.toFixed(2) ?? "?"}s)_`,
         );
 
         return {
@@ -218,7 +203,7 @@ export default function webSearchExtension(pi: ExtensionAPI) {
           details: {
             query: data.query,
             resultCount: data.results.length,
-            responseTime: data.response_time,
+            responseTime: data.responseTime,
           },
         };
       } catch (err) {
