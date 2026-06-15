@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import type { SearchResponse } from "../src/search-provider.js";
-import { InMemorySearchProvider } from "./support/in-memory-search-provider.js";
+import { InMemorySearchRuntime } from "./support/in-memory-search-provider.js";
 
 // Mock @earendil-works/pi-ai (provides StringEnum used for searchDepth)
 vi.mock("@earendil-works/pi-ai", () => ({
@@ -131,7 +131,19 @@ describe("pi-web-search package", () => {
 						packageName: "@davehardy20/pi-web-search",
 						version: "0.1.0",
 						tavilyApiKeySet: false,
+						searchReady: false,
+						searchProvider: "tavily",
 					}),
+				}),
+			);
+			expect(pi.sendMessage).toHaveBeenCalledWith(
+				expect.objectContaining({
+					content: expect.stringContaining("tavily_api_key: not set"),
+				}),
+			);
+			expect(pi.sendMessage).toHaveBeenCalledWith(
+				expect.objectContaining({
+					content: expect.stringContaining("search_ready: not ready"),
 				}),
 			);
 		} finally {
@@ -159,7 +171,19 @@ describe("pi-web-search package", () => {
 				expect.objectContaining({
 					details: expect.objectContaining({
 						tavilyApiKeySet: true,
+						searchReady: true,
+						searchProvider: "tavily",
 					}),
+				}),
+			);
+			expect(pi.sendMessage).toHaveBeenCalledWith(
+				expect.objectContaining({
+					content: expect.stringContaining("tavily_api_key: set"),
+				}),
+			);
+			expect(pi.sendMessage).toHaveBeenCalledWith(
+				expect.objectContaining({
+					content: expect.stringContaining("search_ready: ready"),
 				}),
 			);
 		} finally {
@@ -177,10 +201,7 @@ describe("pi-web-search package", () => {
 
 		try {
 			const pi = createMockPi();
-			webSearchExtension(
-				pi as unknown as ExtensionAPI,
-				() => new InMemorySearchProvider(createSuccessfulResponse()),
-			);
+			webSearchExtension(pi as unknown as ExtensionAPI);
 
 			const tool = pi.tools.get("web_search");
 			expect(tool).toBeDefined();
@@ -196,142 +217,139 @@ describe("pi-web-search package", () => {
 		}
 	});
 
-	it("web_search normalizes parameters before calling the provider", async () => {
+	it("web_search with injected runtime does not require TAVILY_API_KEY", async () => {
 		const originalKey = process.env.TAVILY_API_KEY;
-		process.env.TAVILY_API_KEY = "test-key";
+		delete process.env.TAVILY_API_KEY;
 
 		try {
-			const provider = new InMemorySearchProvider(createSuccessfulResponse());
+			const runtime = new InMemorySearchRuntime(createSuccessfulResponse());
 			const pi = createMockPi();
-			webSearchExtension(pi as unknown as ExtensionAPI, () => provider);
+			webSearchExtension(pi as unknown as ExtensionAPI, runtime);
 
 			const tool = pi.tools.get("web_search");
 			expect(tool).toBeDefined();
 			if (!tool) throw new Error("web_search tool not registered");
-			await tool.execute(
-				"tc1",
-				{ query: "test query", maxResults: 25, searchDepth: "advanced" },
-				new AbortController().signal,
-			);
 
-			expect(provider.lastRequest).toMatchObject({
-				query: "test query",
-				maxResults: 10,
-				searchDepth: "advanced",
-				includeAnswer: true,
-			});
-		} finally {
-			if (originalKey !== undefined) {
-				process.env.TAVILY_API_KEY = originalKey;
-			} else {
-				delete process.env.TAVILY_API_KEY;
-			}
-		}
-	});
-
-	it("web_search returns results from the search provider", async () => {
-		const originalKey = process.env.TAVILY_API_KEY;
-		process.env.TAVILY_API_KEY = "test-key";
-
-		try {
-			const pi = createMockPi();
-			webSearchExtension(
-				pi as unknown as ExtensionAPI,
-				() => new InMemorySearchProvider(createSuccessfulResponse()),
-			);
-
-			const tool = pi.tools.get("web_search");
-			expect(tool).toBeDefined();
-			if (!tool) throw new Error("web_search tool not registered");
 			const result = (await tool.execute(
 				"tc1",
 				{ query: "test query" },
 				new AbortController().signal,
 			)) as {
-				content: Array<{ type: string; text: string }>;
-				details: { query: string; resultCount: number; responseTime: number };
-			};
-
-			expect(result.content[0].type).toBe("text");
-			expect(result.content[0].text).toContain("Test answer");
-			expect(result.content[0].text).toContain("Test Result");
-			expect(result.details.resultCount).toBe(1);
-			expect(result.details.query).toBe("test query");
-		} finally {
-			if (originalKey !== undefined) {
-				process.env.TAVILY_API_KEY = originalKey;
-			} else {
-				delete process.env.TAVILY_API_KEY;
-			}
-		}
-	});
-
-	it("web_search returns no-results message when provider returns empty", async () => {
-		const originalKey = process.env.TAVILY_API_KEY;
-		process.env.TAVILY_API_KEY = "test-key";
-
-		try {
-			const pi = createMockPi();
-			webSearchExtension(
-				pi as unknown as ExtensionAPI,
-				() =>
-					new InMemorySearchProvider({
-						query: "obscure query",
-						results: [],
-						responseTime: 0.3,
-					}),
-			);
-
-			const tool = pi.tools.get("web_search");
-			expect(tool).toBeDefined();
-			if (!tool) throw new Error("web_search tool not registered");
-			const result = (await tool.execute(
-				"tc1",
-				{ query: "obscure query" },
-				new AbortController().signal,
-			)) as {
-				content: Array<{ type: string; text: string }>;
 				details: { resultCount: number };
 			};
 
-			expect(result.content[0].text).toContain("No results found");
-			expect(result.details.resultCount).toBe(0);
+			expect(result.details.resultCount).toBe(1);
+			expect(runtime.lastRequest?.query).toBe("test query");
 		} finally {
 			if (originalKey !== undefined) {
 				process.env.TAVILY_API_KEY = originalKey;
-			} else {
-				delete process.env.TAVILY_API_KEY;
 			}
 		}
 	});
 
-	it("web_search throws on provider error", async () => {
-		const originalKey = process.env.TAVILY_API_KEY;
-		process.env.TAVILY_API_KEY = "test-key";
+	it("web_search normalizes parameters before calling the runtime", async () => {
+		const runtime = new InMemorySearchRuntime(createSuccessfulResponse());
+		const pi = createMockPi();
+		webSearchExtension(pi as unknown as ExtensionAPI, runtime);
 
-		try {
-			const pi = createMockPi();
-			webSearchExtension(
-				pi as unknown as ExtensionAPI,
-				() =>
-					new InMemorySearchProvider(
-						createSuccessfulResponse(),
-						new Error("Tavily API error (401): Unauthorized"),
-					),
-			);
+		const tool = pi.tools.get("web_search");
+		expect(tool).toBeDefined();
+		if (!tool) throw new Error("web_search tool not registered");
+		await tool.execute(
+			"tc1",
+			{ query: "test query", maxResults: 25, searchDepth: "advanced" },
+			new AbortController().signal,
+		);
 
-			const tool = pi.tools.get("web_search");
-			expect(tool).toBeDefined();
-			if (!tool) throw new Error("web_search tool not registered");
-			await expect(
-				tool.execute("tc1", { query: "test" }, new AbortController().signal),
-			).rejects.toThrow("Tavily API error (401)");
-		} finally {
-			if (originalKey !== undefined) {
-				process.env.TAVILY_API_KEY = originalKey;
-			} else {
-				delete process.env.TAVILY_API_KEY;
-			}
-		}
+		expect(runtime.lastRequest).toMatchObject({
+			query: "test query",
+			maxResults: 10,
+			searchDepth: "advanced",
+			includeAnswer: true,
+		});
+
+		await tool.execute(
+			"tc2",
+			{ query: "test query", maxResults: -5, includeAnswer: false },
+			new AbortController().signal,
+		);
+
+		expect(runtime.lastRequest).toMatchObject({
+			query: "test query",
+			maxResults: 1,
+			searchDepth: "basic",
+			includeAnswer: false,
+		});
+	});
+
+	it("web_search returns results from the search runtime", async () => {
+		const pi = createMockPi();
+		webSearchExtension(
+			pi as unknown as ExtensionAPI,
+			new InMemorySearchRuntime(createSuccessfulResponse()),
+		);
+
+		const tool = pi.tools.get("web_search");
+		expect(tool).toBeDefined();
+		if (!tool) throw new Error("web_search tool not registered");
+		const result = (await tool.execute(
+			"tc1",
+			{ query: "test query" },
+			new AbortController().signal,
+		)) as {
+			content: Array<{ type: string; text: string }>;
+			details: { query: string; resultCount: number; responseTime: number };
+		};
+
+		expect(result.content[0].type).toBe("text");
+		expect(result.content[0].text).toContain("Test answer");
+		expect(result.content[0].text).toContain("Test Result");
+		expect(result.details.resultCount).toBe(1);
+		expect(result.details.query).toBe("test query");
+	});
+
+	it("web_search returns no-results message when runtime returns empty", async () => {
+		const pi = createMockPi();
+		webSearchExtension(
+			pi as unknown as ExtensionAPI,
+			new InMemorySearchRuntime({
+				query: "obscure query",
+				results: [],
+				responseTime: 0.3,
+			}),
+		);
+
+		const tool = pi.tools.get("web_search");
+		expect(tool).toBeDefined();
+		if (!tool) throw new Error("web_search tool not registered");
+		const result = (await tool.execute(
+			"tc1",
+			{ query: "obscure query" },
+			new AbortController().signal,
+		)) as {
+			content: Array<{ type: string; text: string }>;
+			details: { resultCount: number };
+		};
+
+		expect(result.content[0].text).toContain("No results found");
+		expect(result.details.resultCount).toBe(0);
+	});
+
+	it("web_search throws on runtime error", async () => {
+		const pi = createMockPi();
+		webSearchExtension(
+			pi as unknown as ExtensionAPI,
+			new InMemorySearchRuntime(
+				createSuccessfulResponse(),
+				new Error("Tavily API error (401): Unauthorized"),
+			),
+		);
+
+		const tool = pi.tools.get("web_search");
+		expect(tool).toBeDefined();
+		if (!tool) throw new Error("web_search tool not registered");
+		await expect(
+			tool.execute("tc1", { query: "test" }, new AbortController().signal),
+		).rejects.toThrow("Search failed: Tavily API error (401): Unauthorized");
 	});
 });
