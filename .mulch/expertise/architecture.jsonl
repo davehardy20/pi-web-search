@@ -1,0 +1,1 @@
+{"type":"pattern","classification":"tactical","recorded_at":"2026-06-15T11:30:37.030Z","evidence":{"commit":"68efb81f845f2d0ec087728b4b56cb2fa8a1357c"},"name":"Provider seam with dual adapters","description":"Pattern: introduce a provider seam with production and test adapters to unify test and production surfaces.","id":"mx-ce85aa"}
